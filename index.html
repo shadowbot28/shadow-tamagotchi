@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadow — Live Agent Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1a1a1a;
+    --border: #222;
+    --green: #00ff88;
+    --green-dim: #00cc6a;
+    --green-glow: rgba(0, 255, 136, 0.15);
+    --cyan: #00e5ff;
+    --purple: #a855f7;
+    --yellow: #fbbf24;
+    --red: #ef4444;
+    --text: #e0e0e0;
+    --text-dim: #666;
+    --text-muted: #444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 20px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot.idle {
+    background: var(--yellow);
+    box-shadow: 0 0 8px var(--yellow);
+  }
+
+  .status-dot.offline {
+    background: var(--red);
+    box-shadow: none;
+    animation: none;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Main scene */
+  .scene {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+  }
+
+  .scene::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 50%, var(--green-glow) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  /* Agent card */
+  .agent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .agent.main .avatar-container { width: 96px; height: 96px; }
+  .agent.sub .avatar-container { width: 64px; height: 64px; }
+
+  .avatar-container {
+    position: relative;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .agent.working .avatar-container {
+    border-color: var(--green-dim);
+    box-shadow: 0 0 20px var(--green-glow);
+  }
+
+  .agent.thinking .avatar-container {
+    border-color: var(--purple);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.2);
+  }
+
+  .avatar-canvas {
+    border-radius: 50%;
+  }
+
+  .agent-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .agent.sub .agent-name {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .agent-status {
+    font-size: 11px;
+    color: var(--green);
+    max-width: 160px;
+    text-align: center;
+    line-height: 1.4;
+    min-height: 32px;
+  }
+
+  .agent.thinking .agent-status { color: var(--purple); }
+  .agent.idle .agent-status { color: var(--yellow); }
+
+  /* Typing animation for status */
+  .typing-cursor {
+    display: inline-block;
+    width: 6px;
+    height: 13px;
+    background: var(--green);
+    margin-left: 2px;
+    animation: blink 0.8s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Stats bar */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+  }
+
+  /* Activity feed */
+  .feed {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .feed-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+  }
+
+  .feed-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.3s ease;
+  }
+
+  .feed-item:last-child { border-bottom: none; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .feed-icon {
+    font-size: 14px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .feed-text {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .feed-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-left: 12px;
+  }
+
+  /* Sub-agent connector lines */
+  .connector {
+    position: absolute;
+    border-top: 1px dashed var(--border);
+    top: 50%;
+    z-index: 0;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .scene { flex-direction: column; gap: 24px; padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="status-dot" id="statusDot"></div>
+    <h1>Shadow — Live Agent Dashboard</h1>
+  </div>
+
+  <div class="scene" id="scene">
+    <!-- Agents rendered here -->
+  </div>
+
+  <div class="stats" id="stats">
+    <div class="stat">
+      <div class="stat-value" id="statPRs">0</div>
+      <div class="stat-label">PRs Shipped</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="statTests">0</div>
+      <div class="stat-label">Tests Passing</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="statCommits">0</div>
+      <div class="stat-label">Commits Today</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="statUptime">0h</div>
+      <div class="stat-label">Uptime</div>
+    </div>
+  </div>
+
+  <div class="feed">
+    <div class="feed-title">Activity Feed</div>
+    <div id="feedList"></div>
+  </div>
+</div>
+
+<script>
+// ── Shadow pixel art renderer ──────────────────────────────────
+
+function drawShadowAvatar(canvas, size, frame, state) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = size * 2; // retina
+  canvas.height = size * 2;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  ctx.scale(2, 2);
+
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // Clear
+  ctx.clearRect(0, 0, size, size);
+
+  // Body glow
+  const glowColor = state === 'thinking' ? 'rgba(168,85,247,0.12)' :
+                     state === 'idle' ? 'rgba(251,191,36,0.08)' :
+                     'rgba(0,255,136,0.12)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.42, 0, Math.PI * 2);
+  ctx.fillStyle = glowColor;
+  ctx.fill();
+
+  // Head/body — dark mech shape
+  const headR = size * 0.3;
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.02, headR, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fill();
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Visor / eyes
+  const eyeColor = state === 'thinking' ? '#a855f7' :
+                    state === 'idle' ? '#fbbf24' :
+                    '#00ff88';
+  const eyeGlow = state === 'thinking' ? 'rgba(168,85,247,0.6)' :
+                  state === 'idle' ? 'rgba(251,191,36,0.4)' :
+                  'rgba(0,255,136,0.6)';
+
+  // Eye blink on certain frames
+  const blinking = frame % 60 > 55;
+  const eyeH = blinking ? 1 : size * 0.055;
+
+  // Left eye
+  ctx.fillStyle = eyeColor;
+  ctx.shadowColor = eyeGlow;
+  ctx.shadowBlur = 8;
+  ctx.fillRect(cx - headR * 0.45, cy - size * 0.06, size * 0.09, eyeH);
+  // Right eye
+  ctx.fillRect(cx + headR * 0.15, cy - size * 0.06, size * 0.09, eyeH);
+  ctx.shadowBlur = 0;
+
+  // "SHADOW" text on forehead (tiny)
+  ctx.fillStyle = eyeColor;
+  ctx.font = `bold ${Math.max(6, size * 0.08)}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('SHADOW', cx, cy - headR * 0.35);
+
+  // Antenna / horn detail
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - headR * 0.3, cy - headR * 0.85);
+  ctx.lineTo(cx - headR * 0.15, cy - headR * 1.15);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + headR * 0.3, cy - headR * 0.85);
+  ctx.lineTo(cx + headR * 0.15, cy - headR * 1.15);
+  ctx.stroke();
+
+  // Antenna tips glow
+  ctx.fillStyle = eyeColor;
+  ctx.shadowColor = eyeGlow;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(cx - headR * 0.15, cy - headR * 1.15, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + headR * 0.15, cy - headR * 1.15, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Working animation — floating particles
+  if (state === 'working') {
+    for (let i = 0; i < 3; i++) {
+      const angle = (frame * 0.03 + i * 2.1) % (Math.PI * 2);
+      const dist = headR * 1.2 + Math.sin(frame * 0.05 + i) * 4;
+      const px = cx + Math.cos(angle) * dist;
+      const py = cy + Math.sin(angle) * dist;
+      ctx.fillStyle = `rgba(0,255,136,${0.3 + Math.sin(frame * 0.08 + i) * 0.2})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Thinking animation — orbiting dots
+  if (state === 'thinking') {
+    for (let i = 0; i < 3; i++) {
+      const angle = (frame * 0.04 + i * 2.1) % (Math.PI * 2);
+      const dist = headR * 1.3;
+      const px = cx + Math.cos(angle) * dist;
+      const py = cy - headR * 0.5 + Math.sin(angle) * dist * 0.3;
+      ctx.fillStyle = `rgba(168,85,247,${0.5 + i * 0.15})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawSubAgentAvatar(canvas, size, frame, index) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = size * 2;
+  canvas.height = size * 2;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  ctx.scale(2, 2);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  ctx.clearRect(0, 0, size, size);
+
+  const colors = ['#00e5ff', '#a855f7', '#f97316', '#ec4899'];
+  const color = colors[index % colors.length];
+
+  // Small bot body
+  const r = size * 0.28;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fill();
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Single eye
+  const blinking = frame % 50 > 46;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.fillRect(cx - size * 0.06, cy - size * 0.02, size * 0.12, blinking ? 1 : size * 0.05);
+  ctx.shadowBlur = 0;
+
+  // Antenna
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx, cy - r - 6);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy - r - 6, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Orbiting work particle
+  const angle = (frame * 0.06 + index) % (Math.PI * 2);
+  const px = cx + Math.cos(angle) * (r + 6);
+  const py = cy + Math.sin(angle) * (r + 6);
+  ctx.fillStyle = `${color}88`;
+  ctx.beginPath();
+  ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ── State management ──────────────────────────────────────────
+
+const state = {
+  status: 'working', // working | thinking | idle | offline
+  currentTask: 'Building Shadow Tamagotchi UI',
+  subAgents: [],
+  stats: { prs: 28, tests: 340, commits: 8, uptimeH: 14 },
+  feed: [
+    { icon: '🔀', text: 'Merged PR #27 — background music for journeys', time: '2m ago' },
+    { icon: '🗄️', text: 'Added background_music column to Neon DB', time: '5m ago' },
+    { icon: '🔀', text: 'Merged PR #26 — email/password auth', time: '8m ago' },
+    { icon: '🗄️', text: 'Added password column to users table', time: '10m ago' },
+    { icon: '🚀', text: 'Opened PR #28 — OG images + view counter', time: '15m ago' },
+    { icon: '✅', text: '340 tests passing across 50 test files', time: '18m ago' },
+    { icon: '📦', text: 'Pushed dep-check to GitHub', time: '25m ago' },
+  ],
+  frame: 0,
+};
+
+// ── Render ─────────────────────────────────────────────────────
+
+function renderScene() {
+  const scene = document.getElementById('scene');
+  scene.innerHTML = '';
+
+  // Main agent
+  const mainAgent = document.createElement('div');
+  mainAgent.className = `agent main ${state.status}`;
+
+  const mainAvatarContainer = document.createElement('div');
+  mainAvatarContainer.className = 'avatar-container';
+  const mainCanvas = document.createElement('canvas');
+  mainCanvas.className = 'avatar-canvas';
+  drawShadowAvatar(mainCanvas, 92, state.frame, state.status);
+  mainAvatarContainer.appendChild(mainCanvas);
+
+  const mainName = document.createElement('div');
+  mainName.className = 'agent-name';
+  mainName.textContent = 'Shadow';
+
+  const mainStatus = document.createElement('div');
+  mainStatus.className = 'agent-status';
+  mainStatus.innerHTML = state.currentTask + '<span class="typing-cursor"></span>';
+
+  mainAgent.append(mainAvatarContainer, mainName, mainStatus);
+  scene.appendChild(mainAgent);
+
+  // Sub-agents
+  state.subAgents.forEach((sub, i) => {
+    const subAgent = document.createElement('div');
+    subAgent.className = 'agent sub working';
+
+    const subAvatarContainer = document.createElement('div');
+    subAvatarContainer.className = 'avatar-container';
+    const subCanvas = document.createElement('canvas');
+    subCanvas.className = 'avatar-canvas';
+    drawSubAgentAvatar(subCanvas, 60, state.frame, i);
+    subAvatarContainer.appendChild(subCanvas);
+
+    const subName = document.createElement('div');
+    subName.className = 'agent-name';
+    subName.textContent = sub.label || `sub-${i}`;
+
+    const subStatus = document.createElement('div');
+    subStatus.className = 'agent-status';
+    subStatus.textContent = sub.task || 'working...';
+
+    subAgent.append(subAvatarContainer, subName, subStatus);
+    scene.appendChild(subAgent);
+  });
+}
+
+function renderStats() {
+  document.getElementById('statPRs').textContent = state.stats.prs;
+  document.getElementById('statTests').textContent = state.stats.tests;
+  document.getElementById('statCommits').textContent = state.stats.commits;
+  document.getElementById('statUptime').textContent = state.stats.uptimeH + 'h';
+}
+
+function renderFeed() {
+  const list = document.getElementById('feedList');
+  list.innerHTML = '';
+  state.feed.slice(0, 8).forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'feed-item';
+    el.innerHTML = `
+      <span class="feed-icon">${item.icon}</span>
+      <span class="feed-text">${item.text}</span>
+      <span class="feed-time">${item.time}</span>
+    `;
+    list.appendChild(el);
+  });
+}
+
+function renderStatusDot() {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (state.status === 'idle' ? ' idle' : state.status === 'offline' ? ' offline' : '');
+}
+
+// ── Animation loop ─────────────────────────────────────────────
+
+function tick() {
+  state.frame++;
+  // Only re-render canvases (not whole DOM) for smooth animation
+  document.querySelectorAll('.agent.main canvas').forEach(c => {
+    drawShadowAvatar(c, 92, state.frame, state.status);
+  });
+  document.querySelectorAll('.agent.sub canvas').forEach((c, i) => {
+    drawSubAgentAvatar(c, 60, state.frame, i);
+  });
+  requestAnimationFrame(tick);
+}
+
+// ── Status polling ─────────────────────────────────────────────
+
+async function pollStatus() {
+  try {
+    const resp = await fetch('/api/status');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.status) state.status = data.status;
+      if (data.currentTask) state.currentTask = data.currentTask;
+      if (data.subAgents) state.subAgents = data.subAgents;
+      if (data.stats) Object.assign(state.stats, data.stats);
+      if (data.feed) state.feed = data.feed;
+      renderScene();
+      renderStats();
+      renderFeed();
+      renderStatusDot();
+    }
+  } catch {
+    // Offline or no API — use static state
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────
+
+renderScene();
+renderStats();
+renderFeed();
+renderStatusDot();
+requestAnimationFrame(tick);
+
+// Poll every 10s if API is available
+setInterval(pollStatus, 10000);
+// Initial poll
+setTimeout(pollStatus, 500);
+</script>
+</body>
+</html>
