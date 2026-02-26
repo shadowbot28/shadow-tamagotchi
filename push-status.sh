@@ -1,9 +1,10 @@
 #!/bin/bash
-# Push Shadow's current status to the Tamagotchi dashboard
-# Usage: ./push-status.sh <json-payload>
+# Push Shadow's current status to the Tamagotchi dashboard via PartyKit
+# Usage: ./push-status.sh '<json>'
 # Example: ./push-status.sh '{"status":"working","currentTask":"Building feature X"}'
 
-API_URL="${SHADOW_TAMAGOTCHI_URL:-https://shadow-tamagotchi.vercel.app}/api/status"
+PARTY_HOST="${PARTY_HOST:-shadow-tamagotchi.shadowbot28.partykit.dev}"
+ROOM="main"
 TOKEN="${SHADOW_API_TOKEN}"
 
 if [ -z "$TOKEN" ]; then
@@ -11,7 +12,7 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-curl -s -X POST "$API_URL" \
+curl -s -X POST "https://${PARTY_HOST}/party/${ROOM}" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "${1:-{}}"

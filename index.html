@@ -606,7 +606,7 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-// ── Status polling ─────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -619,35 +619,87 @@ function timeAgo(ts) {
   return Math.floor(hrs / 24) + 'd ago';
 }
 
+function applyUpdate(data) {
+  if (data.status) state.status = data.status;
+  if (data.currentTask) state.currentTask = data.currentTask;
+  if (data.subAgents) state.subAgents = data.subAgents;
+  if (data.stats) Object.assign(state.stats, data.stats);
+  if (data.feed) state.feed = data.feed;
+
+  // Auto-idle if no update in 5 min
+  if (data.updatedAt && Date.now() - data.updatedAt > 5 * 60 * 1000) {
+    state.status = 'idle';
+    state.currentTask = 'Last seen ' + timeAgo(data.updatedAt);
+  }
+  // Offline if no update in 30 min
+  if (data.updatedAt && Date.now() - data.updatedAt > 30 * 60 * 1000) {
+    state.status = 'offline';
+    state.currentTask = 'Offline — last seen ' + timeAgo(data.updatedAt);
+  }
+
+  renderScene();
+  renderStats();
+  renderFeed();
+  renderStatusDot();
+}
+
+// ── Real-time connection (PartyKit WebSocket) ─────────────────
+
+const PARTY_HOST = window.PARTY_HOST || 'shadow-tamagotchi.shadowbot28.partykit.dev';
+const ROOM = 'main';
+let ws = null;
+let wsConnected = false;
+
+function connectWebSocket() {
+  if (ws && ws.readyState <= 1) return;
+
+  const url = `wss://${PARTY_HOST}/party/${ROOM}`;
+  ws = new WebSocket(url);
+
+  ws.addEventListener('open', () => {
+    console.log('[shadow] ⚡ connected via WebSocket');
+    wsConnected = true;
+  });
+
+  ws.addEventListener('message', (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'state' && msg.data) {
+        applyUpdate(msg.data);
+      }
+    } catch (e) {
+      console.warn('[shadow] bad message', e);
+    }
+  });
+
+  ws.addEventListener('close', () => {
+    console.log('[shadow] disconnected, reconnecting in 3s...');
+    wsConnected = false;
+    setTimeout(connectWebSocket, 3000);
+  });
+
+  ws.addEventListener('error', () => {
+    ws.close();
+  });
+}
+
+// Fallback: poll if WebSocket isn't connected
 async function pollStatus() {
+  if (wsConnected) return; // WebSocket is handling it
   try {
-    const resp = await fetch('/api/status');
+    // Try PartyKit HTTP fallback
+    let resp;
+    try {
+      resp = await fetch(`https://${PARTY_HOST}/party/${ROOM}`);
+    } catch {
+      resp = await fetch('/api/status');
+    }
     if (resp.ok) {
       const data = await resp.json();
-      if (data.status) state.status = data.status;
-      if (data.currentTask) state.currentTask = data.currentTask;
-      if (data.subAgents) state.subAgents = data.subAgents;
-      if (data.stats) Object.assign(state.stats, data.stats);
-      if (data.feed) state.feed = data.feed;
-
-      // Auto-idle if no update in 5 min
-      if (data.updatedAt && Date.now() - data.updatedAt > 5 * 60 * 1000) {
-        state.status = 'idle';
-        state.currentTask = 'Last seen ' + timeAgo(data.updatedAt);
-      }
-      // Offline if no update in 30 min
-      if (data.updatedAt && Date.now() - data.updatedAt > 30 * 60 * 1000) {
-        state.status = 'offline';
-        state.currentTask = 'Offline — last seen ' + timeAgo(data.updatedAt);
-      }
-
-      renderScene();
-      renderStats();
-      renderFeed();
-      renderStatusDot();
+      applyUpdate(data);
     }
   } catch {
-    // Offline or no API — use static state
+    // Offline — use static state
   }
 }
 
@@ -659,10 +711,11 @@ renderFeed();
 renderStatusDot();
 requestAnimationFrame(tick);
 
-// Poll every 10s if API is available
-setInterval(pollStatus, 10000);
-// Initial poll
-setTimeout(pollStatus, 500);
+// Try WebSocket first
+connectWebSocket();
+// Fallback poll every 15s (only fires if WS is down)
+setInterval(pollStatus, 15000);
+setTimeout(pollStatus, 1000);
 </script>
 </body>
 </html>
