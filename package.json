@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npx serve .",
-    "build": "echo 'static site — no build needed'"
+    "dev": "npx serve ."
+  },
+  "dependencies": {
+    "@vercel/kv": "^3.0.0"
   }
 }

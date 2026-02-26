@@ -608,6 +608,17 @@ function tick() {
 
 // ── Status polling ─────────────────────────────────────────────
 
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
+}
+
 async function pollStatus() {
   try {
     const resp = await fetch('/api/status');
@@ -618,6 +629,18 @@ async function pollStatus() {
       if (data.subAgents) state.subAgents = data.subAgents;
       if (data.stats) Object.assign(state.stats, data.stats);
       if (data.feed) state.feed = data.feed;
+
+      // Auto-idle if no update in 5 min
+      if (data.updatedAt && Date.now() - data.updatedAt > 5 * 60 * 1000) {
+        state.status = 'idle';
+        state.currentTask = 'Last seen ' + timeAgo(data.updatedAt);
+      }
+      // Offline if no update in 30 min
+      if (data.updatedAt && Date.now() - data.updatedAt > 30 * 60 * 1000) {
+        state.status = 'offline';
+        state.currentTask = 'Offline — last seen ' + timeAgo(data.updatedAt);
+      }
+
       renderScene();
       renderStats();
       renderFeed();
